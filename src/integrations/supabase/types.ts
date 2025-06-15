@@ -9,7 +9,132 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      chat_conversations: {
+        Row: {
+          ai_response: string | null
+          created_at: string | null
+          id: string
+          user_id: string
+          user_message: string
+        }
+        Insert: {
+          ai_response?: string | null
+          created_at?: string | null
+          id?: string
+          user_id: string
+          user_message: string
+        }
+        Update: {
+          ai_response?: string | null
+          created_at?: string | null
+          id?: string
+          user_id?: string
+          user_message?: string
+        }
+        Relationships: []
+      }
+      daily_tips: {
+        Row: {
+          created_at: string | null
+          date: string | null
+          id: string
+          tip_text: string
+          tip_type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          tip_text: string
+          tip_type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string | null
+          id?: string
+          tip_text?: string
+          tip_type?: string | null
+        }
+        Relationships: []
+      }
+      mood_entries: {
+        Row: {
+          created_at: string | null
+          id: string
+          mood: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          mood: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          mood?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      symptom_checks: {
+        Row: {
+          ai_response: string | null
+          created_at: string | null
+          id: string
+          symptoms: string
+          urgency_level: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_response?: string | null
+          created_at?: string | null
+          id?: string
+          symptoms: string
+          urgency_level?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_response?: string | null
+          created_at?: string | null
+          id?: string
+          symptoms?: string
+          urgency_level?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
