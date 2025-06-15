@@ -14,70 +14,49 @@ const SymptomChecker = () => {
   const [listening, setListening] = useState(false);
   const { toast } = useToast();
 
-  // Simulated AI response based on symptoms
-  const analyzeSymptoms = async (symptomText: string) => {
-    // This is a simplified AI simulation
-    const lowerSymptoms = symptomText.toLowerCase();
-    
-    let urgencyLevel = "mild";
-    let causes = [];
-    let suggestions = [];
-
-    if (lowerSymptoms.includes("chest pain") || lowerSymptoms.includes("difficulty breathing") || lowerSymptoms.includes("severe headache")) {
-      urgencyLevel = "critical";
-      causes = ["Possible cardiac event", "Respiratory distress", "Severe hypertension"];
-      suggestions = ["Seek immediate emergency medical attention", "Call 911 or go to nearest ER", "Do not drive yourself"];
-    } else if (lowerSymptoms.includes("fever") || lowerSymptoms.includes("persistent cough") || lowerSymptoms.includes("severe pain")) {
-      urgencyLevel = "moderate";
-      causes = ["Viral infection", "Bacterial infection", "Inflammatory condition"];
-      suggestions = ["Schedule appointment with healthcare provider", "Monitor symptoms closely", "Rest and stay hydrated"];
-    } else {
-      urgencyLevel = "mild";
-      causes = ["Minor viral illness", "Stress-related symptoms", "Lifestyle factors"];
-      suggestions = ["Rest and self-care", "Stay hydrated", "Monitor for changes", "Consider OTC remedies"];
-    }
-
-    return {
-      urgency_level: urgencyLevel,
-      analysis: {
-        possible_causes: causes,
-        suggestions: suggestions,
-        disclaimer: "This is not a medical diagnosis. Please consult with a healthcare professional for proper medical advice."
-      }
-    };
-  };
-
   const handleSubmit = async () => {
     if (!symptoms.trim()) return;
 
     setLoading(true);
     try {
-      const analysis = await analyzeSymptoms(symptoms);
+      console.log('Analyzing symptoms:', symptoms);
+      
+      // Call Groq API through edge function
+      const { data, error } = await supabase.functions.invoke('groq-symptom-analysis', {
+        body: { symptoms }
+      });
+
+      if (error) throw error;
+
+      console.log('Analysis result:', data);
       
       // Store in database
       const { data: user } = await supabase.auth.getUser();
       if (user?.user) {
-        const { error } = await supabase
+        const { error: dbError } = await supabase
           .from("symptom_checks")
           .insert({
             user_id: user.user.id,
             symptoms,
-            ai_response: JSON.stringify(analysis.analysis),
-            urgency_level: analysis.urgency_level,
+            ai_response: JSON.stringify(data),
+            urgency_level: data.urgency_level,
           });
 
-        if (error) throw error;
+        if (dbError) {
+          console.error('Database error:', dbError);
+        }
       }
 
-      setResponse(analysis);
+      setResponse(data);
       toast({
         title: "Analysis Complete",
-        description: "Your symptoms have been analyzed.",
+        description: "Your symptoms have been analyzed using AI.",
       });
     } catch (error: any) {
+      console.error('Symptom analysis error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to analyze symptoms. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -145,14 +124,14 @@ const SymptomChecker = () => {
         {/* Input Section */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Describe your symptoms
+            Describe your symptoms in detail
           </label>
           <div className="relative">
             <Textarea
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
-              placeholder="Please describe your symptoms in detail..."
-              className="min-h-[100px] pr-12"
+              placeholder="Please describe your symptoms in detail... (e.g., 'I have been experiencing headaches for 3 days, along with nausea and sensitivity to light')"
+              className="min-h-[120px] pr-12"
             />
             <Button
               variant="ghost"
@@ -177,11 +156,16 @@ const SymptomChecker = () => {
           className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
         >
           {loading ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+            <div className="flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+              Analyzing with AI...
+            </div>
           ) : (
-            <Send className="h-4 w-4 mr-2" />
+            <>
+              <Send className="h-4 w-4 mr-2" />
+              Analyze Symptoms
+            </>
           )}
-          Analyze Symptoms
         </Button>
 
         {/* Response Section */}
@@ -205,7 +189,7 @@ const SymptomChecker = () => {
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-semibold text-gray-900 mb-2">Possible Causes:</h4>
               <ul className="list-disc list-inside space-y-1">
-                {response.analysis.possible_causes.map((cause: string, index: number) => (
+                {response.possible_causes?.map((cause: string, index: number) => (
                   <li key={index} className="text-gray-700">{cause}</li>
                 ))}
               </ul>
@@ -215,7 +199,7 @@ const SymptomChecker = () => {
             <div className="bg-blue-50 p-4 rounded-lg">
               <h4 className="font-semibold text-gray-900 mb-2">Recommendations:</h4>
               <ul className="list-disc list-inside space-y-1">
-                {response.analysis.suggestions.map((suggestion: string, index: number) => (
+                {response.suggestions?.map((suggestion: string, index: number) => (
                   <li key={index} className="text-gray-700">{suggestion}</li>
                 ))}
               </ul>
@@ -224,7 +208,7 @@ const SymptomChecker = () => {
             {/* Disclaimer */}
             <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
               <p className="text-sm text-yellow-800">
-                <strong>Disclaimer:</strong> {response.analysis.disclaimer}
+                <strong>Disclaimer:</strong> {response.disclaimer}
               </p>
             </div>
           </motion.div>
