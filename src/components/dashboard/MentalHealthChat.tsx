@@ -75,34 +75,6 @@ const MentalHealthChat = () => {
     loadConversations();
   }, []);
 
-  const generateEmpathicResponse = (userMessage: string) => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    // Emotional support responses
-    if (lowerMessage.includes("sad") || lowerMessage.includes("down") || lowerMessage.includes("depressed")) {
-      return "I hear that you're feeling sad right now. It's completely valid to feel this way, and I want you to know that these feelings are temporary. You're not alone in this. Would you like to talk about what's contributing to these feelings?";
-    }
-    
-    if (lowerMessage.includes("anxious") || lowerMessage.includes("worried") || lowerMessage.includes("stress")) {
-      return "Anxiety can feel overwhelming, but remember that you've gotten through difficult times before. Let's take a moment to breathe together. Can you tell me about what's causing you to feel anxious right now?";
-    }
-    
-    if (lowerMessage.includes("angry") || lowerMessage.includes("frustrated") || lowerMessage.includes("mad")) {
-      return "I can sense your frustration, and it's okay to feel angry sometimes. These emotions are telling you something important. What would help you feel more at peace right now?";
-    }
-    
-    if (lowerMessage.includes("happy") || lowerMessage.includes("good") || lowerMessage.includes("great")) {
-      return "I'm so glad to hear you're feeling positive! It's wonderful when we can appreciate these moments of happiness. What's contributing to your good mood today?";
-    }
-    
-    if (lowerMessage.includes("lonely") || lowerMessage.includes("alone")) {
-      return "Feeling lonely can be really difficult. Please remember that reaching out, like you're doing now, is a brave step. You matter, and your feelings are valid. Is there something specific that would help you feel more connected?";
-    }
-    
-    // Default empathic response
-    return "Thank you for sharing that with me. I can hear that this is important to you. Your feelings are valid, and I'm here to listen. Can you tell me more about how you're experiencing this?";
-  };
-
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
@@ -114,12 +86,19 @@ const MentalHealthChat = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const userInput = input;
     setInput("");
     setLoading(true);
 
     try {
-      // Generate AI response
-      const aiResponseText = generateEmpathicResponse(input);
+      // Call Gemini API through edge function
+      const { data, error } = await supabase.functions.invoke('gemini-chat', {
+        body: { message: userInput }
+      });
+
+      if (error) throw error;
+
+      const aiResponseText = data.response || "I'm here to listen and support you. Could you please try sharing your thoughts again?";
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -133,15 +112,15 @@ const MentalHealthChat = () => {
       // Save to database
       const { data: user } = await supabase.auth.getUser();
       if (user?.user) {
-        const { error } = await supabase
+        const { error: dbError } = await supabase
           .from("chat_conversations")
           .insert({
             user_id: user.user.id,
-            user_message: input,
+            user_message: userInput,
             ai_response: aiResponseText,
           });
 
-        if (error) throw error;
+        if (dbError) console.error('Database error:', dbError);
       }
 
       // Text-to-speech for AI response
@@ -153,11 +132,21 @@ const MentalHealthChat = () => {
       }
 
     } catch (error: any) {
+      console.error('Chat error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "I'm having trouble connecting right now. Please try again.",
         variant: "destructive",
       });
+
+      // Add fallback response
+      const fallbackMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm here to listen and support you. I may be having some connection issues, but please know that your feelings are valid and important.",
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, fallbackMessage]);
     } finally {
       setLoading(false);
     }
@@ -205,7 +194,7 @@ const MentalHealthChat = () => {
           🧠 Mental Health Support
         </h2>
         <p className="text-gray-600 text-sm mt-1">
-          A safe space to share your thoughts and feelings
+          A safe space to share your thoughts and feelings - powered by AI
         </p>
       </div>
 
