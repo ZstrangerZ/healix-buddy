@@ -22,7 +22,7 @@ serve(async (req) => {
 
     const groqApiKey = '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';
     
-    console.log('Sending request to Groq API for symptom analysis...');
+    console.log('Analyzing symptoms:', symptoms);
     
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -35,7 +35,7 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are a medical AI assistant for symptom analysis. Analyze the given symptoms and provide a structured response in JSON format with the following structure:
+            content: `You are a medical AI assistant for symptom analysis. You MUST respond with ONLY a valid JSON object in this exact format:
             {
               "urgency_level": "critical|moderate|mild",
               "possible_causes": ["cause1", "cause2", "cause3"],
@@ -44,19 +44,20 @@ serve(async (req) => {
             }
 
             Guidelines for urgency levels:
-            - Critical: Chest pain, difficulty breathing, severe headache, signs of stroke, severe bleeding, high fever with confusion
-            - Moderate: Persistent fever, severe pain, persistent cough, unusual fatigue, concerning changes
-            - Mild: Minor aches, slight fever, common cold symptoms, minor cuts
+            - Critical: Chest pain, difficulty breathing, severe headache, signs of stroke, severe bleeding, high fever with confusion, severe allergic reactions
+            - Moderate: Persistent fever, severe pain, persistent cough, unusual fatigue, concerning changes, moderate injuries
+            - Mild: Minor aches, slight fever, common cold symptoms, minor cuts, mild headaches
 
-            Be specific and relevant to the symptoms provided. Provide actionable suggestions.`
+            Be specific and relevant to the symptoms provided. Provide actionable suggestions. 
+            IMPORTANT: Respond with ONLY the JSON object, no additional text or explanations.`
           },
           {
             role: 'user',
-            content: `Analyze these symptoms: ${symptoms}`
+            content: `Analyze these symptoms and respond with only the JSON object: ${symptoms}`
           }
         ],
-        temperature: 0.3,
-        max_tokens: 500,
+        temperature: 0.1,
+        max_tokens: 300,
       }),
     });
 
@@ -76,19 +77,52 @@ serve(async (req) => {
       throw new Error('Invalid response from Groq API');
     }
 
-    const analysisText = data.choices[0].message.content;
+    let analysisText = data.choices[0].message.content.trim();
+    console.log('Raw analysis text:', analysisText);
     
-    // Parse the JSON response
+    // Extract JSON from the response text
     let analysis;
     try {
+      // Try to find JSON in the response
+      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysisText = jsonMatch[0];
+      }
+      
       analysis = JSON.parse(analysisText);
+      console.log('Successfully parsed analysis:', analysis);
+      
+      // Validate the response structure
+      if (!analysis.urgency_level || !analysis.possible_causes || !analysis.suggestions) {
+        throw new Error('Invalid analysis structure');
+      }
+      
     } catch (parseError) {
-      console.error('Failed to parse JSON response:', analysisText);
-      // Fallback response if JSON parsing fails
+      console.error('Failed to parse JSON response:', analysisText, parseError);
+      
+      // Create a more specific fallback based on common symptoms
+      const symptomsLower = symptoms.toLowerCase();
+      let urgencyLevel = "mild";
+      let causes = ["Common condition", "Requires evaluation"];
+      let suggestions = ["Monitor symptoms", "Rest and hydration", "Consult healthcare provider if symptoms persist"];
+      
+      // Basic symptom analysis for fallback
+      if (symptomsLower.includes("chest pain") || symptomsLower.includes("difficulty breathing") || 
+          symptomsLower.includes("severe headache") || symptomsLower.includes("confusion")) {
+        urgencyLevel = "critical";
+        causes = ["Potentially serious condition", "Requires immediate attention"];
+        suggestions = ["Seek immediate medical attention", "Call emergency services if severe", "Do not delay treatment"];
+      } else if (symptomsLower.includes("fever") || symptomsLower.includes("persistent pain") || 
+                 symptomsLower.includes("severe") || symptomsLower.includes("unusual")) {
+        urgencyLevel = "moderate";
+        causes = ["Possible infection or inflammation", "May require medical evaluation"];
+        suggestions = ["Consult healthcare provider within 24-48 hours", "Monitor temperature and symptoms", "Seek care if worsening"];
+      }
+      
       analysis = {
-        urgency_level: "moderate",
-        possible_causes: ["Various conditions possible", "Further evaluation needed"],
-        suggestions: ["Consult healthcare provider", "Monitor symptoms", "Seek medical attention if worsening"],
+        urgency_level: urgencyLevel,
+        possible_causes: causes,
+        suggestions: suggestions,
         disclaimer: "This is not a medical diagnosis. Please consult with a healthcare professional for proper medical advice."
       };
     }
@@ -102,8 +136,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       error: error.message,
       urgency_level: "moderate",
-      possible_causes: ["Analysis temporarily unavailable"],
-      suggestions: ["Please try again or consult healthcare provider directly"],
+      possible_causes: ["Analysis temporarily unavailable", "Technical issue occurred"],
+      suggestions: ["Please try again in a moment", "Consult healthcare provider directly if urgent", "Contact medical professional for evaluation"],
       disclaimer: "This is not a medical diagnosis. Please consult with a healthcare professional for proper medical advice."
     }), {
       status: 500,
